@@ -50,7 +50,7 @@ npx -y skills add FUTUREWORKER/wooboo-ai-cli --skill wooboo-creative-agent
 
 也可以把 `skills/<skill-name>` 整个目录复制到目标 Agent 的 skill/instruction 目录。仓库里的 skill 是 Agent 通用格式，不依赖 Codex 专属目录。
 
-Skill 全程使用挖宝AI系统名称：图片使用“专业模型”“标准模型”“基础模型”，视频使用“闪影”“灵光”“速影 2.5 Flash”。IP 分身、爆款视频拆解、历史和收藏仍可直接通过 CLI 使用，但不再提供独立 Agent Skill。
+Skill 全程使用挖宝AI系统名称：图片使用“专业模型”“标准模型”“基础模型”，视频使用“闪影”“灵光”“速影 2.5Flash”。IP 分身、爆款视频拆解、历史和收藏仍可直接通过 CLI 使用，但不再提供独立 Agent Skill。
 
 各 Skill 会先从用户消息、对话上下文和附件中补全参数。只有缺少无法推断且会阻止任务提交的必要信息时才向用户追问；可选参数或已有默认值的参数不会逐项询问，同时缺少多个必要信息时会合并成一次简短提问。
 
@@ -128,11 +128,13 @@ wooboo video generate \
   --audio
 ```
 
-速影 2.5 Flash 文生视频：
+图片和视频生成通过JSON提交参数；参考素材先经系统授权直传，再提交上传标识。模型显示名以`wooboo video models`的实际输出为准（含空格），也可用`--model-config-id`指定。
+
+速影 2.5Flash 文生视频：
 
 ```bash
 wooboo video generate \
-  --model "速影 2.5 Flash" \
+  --model "速影 2.5Flash" \
   --mode t2v \
   --prompt "电影感产品广告，柔和灯光扫过主体" \
   --duration-seconds 5

@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 DEFAULT_API_BASE = "https://wooboo.ycszai.com"
 DEFAULT_H5_BASE = "https://wooboo.ycszai.com"
 CONFIG_DIR = Path.home() / ".wooboo-ai"
@@ -893,8 +893,19 @@ def image_generate(args):
         ("variantKey", variant.get("variantKey") or ""),
         ("modelConfigId", model.get("id") or ""),
     ]
-    files = [("referenceImages", item) for item in args.reference_image]
-    _, payload = request_multipart(f"{api_base}/api/h5/image-generations", fields, files, token)
+    completed_uploads = []
+    try:
+        for path in args.reference_image:
+            completed_uploads.append(direct_upload_file(
+                api_base, token, path, "image_generation_reference", "referenceImages", "image/png"
+            ))
+        body = dict(fields)
+        body["referenceUploadIds"] = [item["uploadId"] for item in completed_uploads]
+        _, payload = request_json("POST", f"{api_base}/api/h5/image-generations", body, token=token, timeout=60)
+    except Exception:
+        for item in completed_uploads:
+            delete_media_upload(api_base, token, item["uploadId"])
+        raise
     record = payload.get("record", {})
     record_id = record.get("id", "")
     if not args.wait or not record_id:
@@ -1186,7 +1197,7 @@ def video_generate(args):
                 {"fieldName": item["fieldName"], "uploadId": item["uploadId"]}
                 for item in completed_uploads
             ], ensure_ascii=False)))
-        _, payload = request_multipart(f"{api_base}/api/h5/video-generations", fields, [], token, timeout=300)
+        _, payload = request_json("POST", f"{api_base}/api/h5/video-generations", dict(fields), token=token, timeout=300)
     except Exception:
         for item in completed_uploads:
             delete_media_upload(api_base, token, item["uploadId"])

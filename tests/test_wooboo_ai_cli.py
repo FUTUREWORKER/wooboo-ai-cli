@@ -166,16 +166,47 @@ class CommandContractTests(unittest.TestCase):
         )
         captured = {}
 
-        def request_multipart(url, fields, files, token, timeout=60):
-            captured.update({"fields": dict(fields), "files": files})
+        def request_json(method, url, fields, token, timeout=60):
+            self.assertEqual(method, "POST")
+            captured.update({"fields": dict(fields), "files": []})
             return 202, {"record": {"id": "record-id", "status": "生成中"}}
 
-        with mock.patch.object(cli, "load_credentials", return_value={"api_base": "https://api.example", "token": "token"}), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_image_bootstrap", return_value={"models": [model], "aspectRatios": model["aspectRatios"]}), mock.patch.object(cli, "request_multipart", side_effect=request_multipart), mock.patch("sys.stdout", new_callable=io.StringIO):
+        with mock.patch.object(cli, "load_credentials", return_value={"api_base": "https://api.example", "token": "token"}), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_image_bootstrap", return_value={"models": [model], "aspectRatios": model["aspectRatios"]}), mock.patch.object(cli, "request_json", side_effect=request_json), mock.patch("sys.stdout", new_callable=io.StringIO):
             cli.image_generate(args)
         self.assertEqual(captured["fields"]["modelConfigId"], "image-model-id")
         self.assertEqual(captured["fields"]["variantKey"], "standard")
         self.assertEqual(captured["fields"]["quality"], "standard")
         self.assertEqual(captured["fields"]["aspectRatio"], "auto")
+
+    def test_image_reference_uploads_and_failure_cleanup(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                with mock.patch("sys.argv", ["wooboo", "image", "generate", "--prompt", "cat", "--reference-image", "cat.png"]):
+                    args = cli.parse_args()
+                    args.wait = False
+                with mock.patch.object(cli, "load_credentials", return_value={"api_base": "https://api.example", "token": "token"}), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_image_bootstrap", return_value={"models": [image_model()]}), mock.patch.object(cli, "direct_upload_file", return_value={"uploadId": "upload-id"}) as upload, mock.patch.object(cli, "request_json", return_value=(202, {"record": {"id": "record-id"}}), side_effect=RuntimeError("submit failed") if fail else None) as submit, mock.patch.object(cli, "delete_media_upload") as cleanup, mock.patch("sys.stdout", new_callable=io.StringIO):
+                    if fail:
+                        with self.assertRaisesRegex(RuntimeError, "submit failed"):
+                            cli.image_generate(args)
+                        cleanup.assert_called_once_with("https://api.example", "token", "upload-id")
+                    else:
+                        cli.image_generate(args)
+                        cleanup.assert_not_called()
+                    upload.assert_called_once_with("https://api.example", "token", "cat.png", "image_generation_reference", "referenceImages", "image/png")
+                    self.assertEqual(submit.call_args.args[0], "POST")
+                    self.assertEqual(submit.call_args.args[2]["referenceUploadIds"], ["upload-id"])
+
+    def test_generation_requests_use_json_on_wire(self):
+        for path in ("image-generations", "video-generations"):
+            response = mock.MagicMock()
+            response.__enter__.return_value = response
+            response.status = 202
+            response.read.return_value = b'{}'
+            with mock.patch.object(cli.urllib.request, "urlopen", return_value=response) as send:
+                cli.request_json("POST", "https://api.example/api/h5/" + path, {"prompt": "cat", "referenceUploadIds": []}, token="token")
+            request = send.call_args.args[0]
+            self.assertEqual(request.get_header("Content-type"), "application/json")
+            self.assertEqual(json.loads(request.data), {"prompt": "cat", "referenceUploadIds": []})
 
     def test_voice_clone_submits_upload_id_and_new_field_names(self):
         args = SimpleNamespace(
@@ -348,11 +379,12 @@ class CommandContractTests(unittest.TestCase):
         ])
         captured = {}
 
-        def request_multipart(url, fields, files, token, timeout=60):
-            captured.update({"url": url, "fields": dict(fields), "files": files})
+        def request_json(method, url, fields, token, timeout=60):
+            self.assertEqual(method, "POST")
+            captured.update({"url": url, "fields": dict(fields), "files": []})
             return 202, {"task": {"taskId": "task-id", "taskStatus": "生成中"}}
 
-        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", side_effect=lambda *args, **kwargs: next(uploads)), mock.patch.object(cli, "request_multipart", side_effect=request_multipart), mock.patch("sys.stdout", new_callable=io.StringIO):
+        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", side_effect=lambda *args, **kwargs: next(uploads)), mock.patch.object(cli, "request_json", side_effect=request_json), mock.patch("sys.stdout", new_callable=io.StringIO):
             cli.video_generate(args)
         self.assertEqual(captured["files"], [])
         self.assertEqual(json.loads(captured["fields"]["mediaUploads"]), [
@@ -387,7 +419,7 @@ class CommandContractTests(unittest.TestCase):
             timeout=10,
             output_dir="",
         )
-        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", return_value={"uploadId": "frame-upload", "fieldName": "firstFrameFile"}), mock.patch.object(cli, "request_multipart", side_effect=RuntimeError("submit failed")), mock.patch.object(cli, "delete_media_upload") as cleanup:
+        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", return_value={"uploadId": "frame-upload", "fieldName": "firstFrameFile"}), mock.patch.object(cli, "request_json", side_effect=RuntimeError("submit failed")), mock.patch.object(cli, "delete_media_upload") as cleanup:
             with self.assertRaisesRegex(RuntimeError, "submit failed"):
                 cli.video_generate(args)
         cleanup.assert_called_once_with("https://api.example", "token", "frame-upload")
@@ -448,11 +480,12 @@ class CommandContractTests(unittest.TestCase):
         ])
         captured = {}
 
-        def request_multipart(url, fields, files, token, timeout=60):
-            captured.update({"fields": dict(fields), "files": files})
+        def request_json(method, url, fields, token, timeout=60):
+            self.assertEqual(method, "POST")
+            captured.update({"fields": dict(fields), "files": []})
             return 202, {"task": {"taskId": "task-id", "taskStatus": "生成中"}}
 
-        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", side_effect=lambda *args, **kwargs: next(uploads)), mock.patch.object(cli, "request_multipart", side_effect=request_multipart), mock.patch("sys.stdout", new_callable=io.StringIO):
+        with mock.patch.object(cli, "get_cli_credentials", return_value=("https://api.example", "token")), mock.patch.object(cli, "load_config", return_value={}), mock.patch.object(cli, "fetch_video_bootstrap", return_value={"models": [model]}), mock.patch.object(cli, "direct_upload_file", side_effect=lambda *args, **kwargs: next(uploads)), mock.patch.object(cli, "request_json", side_effect=request_json), mock.patch("sys.stdout", new_callable=io.StringIO):
             cli.video_generate(args)
         manifest = json.loads(captured["fields"]["mediaUploads"])
         self.assertEqual([item["fieldName"] for item in manifest], [
@@ -608,7 +641,7 @@ class DistributionMetadataTests(unittest.TestCase):
             "wooboo image models",
             "wooboo video models",
             '--model "专业模型"',
-            '--model "速影 2.5 Flash"',
+            '--model "速影 2.5Flash"',
             "wooboo video-package generate",
             "wooboo agent chat creative-agent",
             "wooboo ip-clone create",

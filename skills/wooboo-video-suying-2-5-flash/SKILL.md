@@ -1,11 +1,11 @@
 ---
 name: wooboo-video-suying-2-5-flash
-description: 通过挖宝AI“速影 2.5 Flash”生成视频，支持文生视频、单图生视频、首尾帧和图片或音频参考创作。
+description: 通过挖宝AI“速影 2.5Flash”生成视频，支持文生视频、单图生视频、首尾帧和图片或音频参考创作。
 ---
 
-# 挖宝AI速影 2.5 Flash 视频生成
+# 挖宝AI速影 2.5Flash 视频生成
 
-使用 `wooboo` CLI，并通过系统显示名“速影 2.5 Flash”选择模型和说明结果。
+使用 `wooboo` CLI，并通过系统显示名“速影 2.5Flash”选择模型和说明结果。
 
 ## 参数补全与追问
 
@@ -22,7 +22,7 @@ description: 通过挖宝AI“速影 2.5 Flash”生成视频，支持文生视�
 
 ```bash
 wooboo video generate \
-  --model "速影 2.5 Flash" \
+  --model "速影 2.5Flash" \
   --mode t2v \
   --prompt "电影感产品广告，柔和灯光扫过主体，镜头缓慢推进" \
   --duration-seconds 5
@@ -32,7 +32,7 @@ wooboo video generate \
 
 ```bash
 wooboo video generate \
-  --model "速影 2.5 Flash" \
+  --model "速影 2.5Flash" \
   --mode i2v \
   --prompt "保持人物和服装一致，自然转头并微笑" \
   --first-frame /path/to/image.png \
@@ -43,7 +43,7 @@ wooboo video generate \
 
 ```bash
 wooboo video generate \
-  --model "速影 2.5 Flash" \
+  --model "速影 2.5Flash" \
   --mode first_last_frame \
   --prompt "镜头从首帧平滑运动到尾帧，主体变化自然连续" \
   --first-frame /path/to/first.png \
@@ -55,7 +55,7 @@ wooboo video generate \
 
 ```bash
 wooboo video generate \
-  --model "速影 2.5 Flash" \
+  --model "速影 2.5Flash" \
   --mode r2v \
   --prompt "保持参考人物和产品一致，并参考音频节奏生成品牌短片" \
   --reference-image /path/to/person.png \
